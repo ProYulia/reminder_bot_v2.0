@@ -1,2 +1,2 @@
-r_token = '5599383911:AAHHwW3OM5Pn82wu_y8cZ0DwGOKDc5IdX1M'
+r_token = 'YOUR TOKEN'
 
