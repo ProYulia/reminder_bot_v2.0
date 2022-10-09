@@ -1,17 +1,10 @@
-import time
-
-from aiogram import types, Dispatcher
+from aiogram import types
 from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.dispatcher.filters import Text
 import keyboard as kb
-from create_bot import dp, bot
-import datetime
-
-
-class FSMAdmin(StatesGroup):
-    text = State()
-    date = State()
+from create_bot import bot
+import asyncio
+from database import sqlite_db as sql
+from rbot_handlers.states import FSMAdmin
 
 
 async def command_start(message):
@@ -38,14 +31,23 @@ async def set_text(message: types.Message, state: FSMContext):
 async def set_date(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['date'] = message.text
-        now = datetime.datetime.now()
-        current_time = now.strftime("%H:%M")
-        while current_time <= str(data['date']):
-            time.sleep(5)
-            if current_time == str(data['date']):
-                await bot.send_message(message.from_user.id, "Напоминание! " + str(data['text']))
-                break
+        await sql.add_reminder(
+            dict(user_id=message.from_user.id,
+                 text=data['text'],
+                 time=data['date']))
+        # await message.answer()
         await state.finish()
+
+
+async def check_tasks():
+    for task in await sql.select_reminder():
+        await bot.send_message(task["user_id"], task['time'])
+        await sql.delete_reminder(task["id"])
+
+
+def repeat_check_tasks(loop):
+    asyncio.ensure_future(check_tasks(), loop=loop)
+    loop.call_later(2, repeat_check_tasks, loop)
 
 
 async def cancel(message: types.Message, state: FSMContext):
@@ -55,12 +57,4 @@ async def cancel(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer('Добавление записи отменено')
 
-
-def register_handlers_client(dp: Dispatcher):
-    dp.register_message_handler(command_start, commands=['start', 'help'])
-    dp.register_message_handler(command_create, commands='Создать_напоминание', state=None)
-    dp.register_message_handler(cancel, state="*", commands='Отменить')
-    dp.register_message_handler(cancel, Text(equals='Отменить', ignore_case=True), state="*")
-    dp.register_message_handler(set_text, state=FSMAdmin.text)
-    dp.register_message_handler(set_date, state=FSMAdmin.date)
 
